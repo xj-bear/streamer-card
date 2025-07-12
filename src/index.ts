@@ -53,6 +53,7 @@ async function initCluster() {
         concurrency: Cluster.CONCURRENCY_CONTEXT, // 使用上下文并发模式
         maxConcurrency: maxConcurrency, // 设置最大并发数
         puppeteerOptions: {
+            executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // 使用系统安装的 Chrome
             args: [
                 '--disable-dev-shm-usage', // 禁用 /dev/shm 使用
                 '--disable-setuid-sandbox', // 禁用 setuid sandbox
@@ -198,6 +199,43 @@ async function processRequest(body) {
                 if (contentEl) contentEl.innerHTML = html;
             }, html);
             console.log('卡片内容已设置');
+
+            // 等待内容中的图片加载完成
+            await page.evaluate(() => {
+                return new Promise((resolve) => {
+                    const images = document.querySelectorAll('[name="showContent"] img');
+                    if (images.length === 0) {
+                        resolve(true);
+                        return;
+                    }
+
+                    let loadedCount = 0;
+                    const totalImages = images.length;
+
+                    const checkComplete = () => {
+                        loadedCount++;
+                        if (loadedCount >= totalImages) {
+                            resolve(true);
+                        }
+                    };
+
+                    images.forEach((img: any) => {
+                        if (img.complete) {
+                            checkComplete();
+                        } else {
+                            img.addEventListener('load', checkComplete);
+                            img.addEventListener('error', checkComplete);
+                        }
+                    });
+
+                    // 设置超时，避免无限等待
+                    setTimeout(() => resolve(true), 10000);
+                });
+            });
+            console.log('内容图片加载完成');
+
+            // 额外等待，确保布局重新计算完成
+            await delay(2000);
         }
 
         if (iconSrc && iconSrc.startsWith('http')) {
@@ -221,29 +259,88 @@ async function processRequest(body) {
             console.log('图标已设置');
         }
 
+        // 等待页面布局稳定，确保所有内容都已渲染
+        await page.waitForFunction(() => {
+            return document.readyState === 'complete';
+        }, { timeout: 30000 });
+
+        // 额外等待确保动态内容渲染完成
+        await delay(3000);
+
         const boundingBox = await cardElement.boundingBox(); // 获取卡片元素边界框
         console.log('boundingBox', boundingBox);
+
+        // 验证边界框是否合理
+        if (!boundingBox || boundingBox.height < 100) {
+            console.error('边界框异常，重新获取');
+            await delay(2000);
+            const retryBoundingBox = await cardElement.boundingBox();
+            console.log('重试后的boundingBox', retryBoundingBox);
+            if (retryBoundingBox && retryBoundingBox.height > boundingBox?.height) {
+                Object.assign(boundingBox, retryBoundingBox);
+            }
+        }
 
         let imgScale = body.imgScale ? body.imgScale : scale;
 
         if (boundingBox.height > viewPortConfig.height) {
             console.log('卡片高度大于视口高度，需要截取图片',boundingBox.height);
-            const newHeight = Math.max(Math.floor(boundingBox.height))+200;  // 确保最小高度为 2000px
+            // 使用 Math.ceil 向上取整，确保不丢失任何像素
+            // 增加更大的缓冲区（600px）以确保二维码等底部内容完整显示
+            const newHeight = Math.ceil(boundingBox.height) + 600;
             await page.setViewport({
                 width: 1920,
                 height: newHeight
             });
             console.log('调整视口高度:', newHeight);
+
+            // 调整视口后等待重新渲染
+            await delay(2000);
+        }
+
+        // 在调整视口后重新获取边界框，确保位置准确
+        const finalBoundingBox = await cardElement.boundingBox();
+        console.log('最终边界框:', finalBoundingBox);
+
+        // 检查内容是否完整渲染（通过检查特定文本是否存在）
+        const contentCheck = await page.evaluate(() => {
+            const contentEl = document.querySelector('[name="showContent"]');
+            if (contentEl) {
+                const text = contentEl.textContent || '';
+                const hasConclusion = text.includes('如果您能看到这段文字，说明高度自适应功能工作正常');
+                const hasQRCode = document.querySelector('[name="showContent"]') &&
+                                 document.querySelector('*[class*="qr"], *[id*="qr"], *[class*="code"]');
+                return {
+                    textLength: text.length,
+                    hasConclusion,
+                    hasQRCode: !!hasQRCode,
+                    fullText: text.substring(text.length - 100) // 最后100个字符
+                };
+            }
+            return { textLength: 0, hasConclusion: false, hasQRCode: false, fullText: '' };
+        });
+        console.log('内容完整性检查:', contentCheck);
+
+        // 如果内容不完整，等待更长时间
+        if (!contentCheck.hasConclusion) {
+            console.log('内容可能不完整，等待更长时间...');
+            await delay(5000);
+            const retryBoundingBox = await cardElement.boundingBox();
+            console.log('重试后边界框:', retryBoundingBox);
+            if (retryBoundingBox && retryBoundingBox.height > finalBoundingBox.height) {
+                Object.assign(finalBoundingBox, retryBoundingBox);
+                console.log('使用重试后的边界框');
+            }
         }
 
         console.log('图片缩放比例为:', imgScale)
         const buffer = await page.screenshot({
             type: 'png', // 设置截图格式为 PNG
             clip: {
-                x: boundingBox.x,
-                y: boundingBox.y,
-                width: boundingBox.width,
-                height: boundingBox.height,
+                x: finalBoundingBox.x,
+                y: finalBoundingBox.y,
+                width: finalBoundingBox.width,
+                height: finalBoundingBox.height,
                 scale: imgScale // 设置截图缩放比例
             },
             timeout: 60000, // 设置截图超时
