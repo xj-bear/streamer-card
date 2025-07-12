@@ -19,8 +19,8 @@ const port = 3003; // 设置服务器监听端口
 let url = 'https://fireflycard.shushiai.com/zh/reqApi'; // 要访问的目标 URL
 // let url = 'http://localhost:3001/zh/reqApi'; // 要访问的目标 URL
 const scale = 2; // 设置截图的缩放比例，图片不清晰就加大这个数值
-const maxRetries = 3; // 设置请求重试次数
-const maxConcurrency = 10; // 设置 Puppeteer 集群的最大并发数
+const maxRetries = 2; // 设置请求重试次数，降低重试次数
+const maxConcurrency = process.env.NODE_ENV === 'production' ? 2 : 5; // 生产环境降低并发数
 const app = express(); // 创建 Express 应用
 
 // 配置 CORS 中间件，允许所有跨域请求
@@ -35,14 +35,19 @@ app.use(express.urlencoded({extended: false})); // 使用 URL 编码中间件
 
 let cluster; // 定义 Puppeteer 集群变量
 
-// 设置 LRU 缓存，最大缓存项数和最大内存限制
+// 请求队列管理
+let activeRequests = 0;
+const maxActiveRequests = process.env.NODE_ENV === 'production' ? 2 : 3;
+const requestQueue: Array<{ resolve: Function, reject: Function }> = [];
+
+// 设置 LRU 缓存，针对低内存环境优化
 const cache = new LRUCache({
-    max: 100, // 缓存最大项数，可以根据需要调整
-    maxSize: 50 * 1024 * 1024, // 最大缓存大小 50MB
+    max: process.env.NODE_ENV === 'production' ? 20 : 50, // 生产环境减少缓存项
+    maxSize: process.env.NODE_ENV === 'production' ? 20 * 1024 * 1024 : 50 * 1024 * 1024, // 生产环境减少缓存大小
     sizeCalculation: (value: any, key: any) => {
         return value.length; // 缓存项大小计算方法
     },
-    ttl: 600 * 1000, // 缓存项 10 分钟后过期
+    ttl: 300 * 1000, // 缓存项 5 分钟后过期，减少内存占用
     allowStale: false, // 不允许使用过期的缓存项
     updateAgeOnGet: true, // 获取缓存项时更新其年龄
 });
@@ -58,15 +63,27 @@ async function initCluster() {
             args: [
                 '--disable-dev-shm-usage', // 禁用 /dev/shm 使用
                 '--disable-setuid-sandbox', // 禁用 setuid sandbox
-                '--no-first-run', // 禁止首次运行流程，例如导入书签，设置默认引擎等等
+                '--no-first-run', // 禁止首次运行流程
                 '--no-sandbox', // 禁用沙盒模式
                 '--no-zygote', // 禁用 zygote
                 '--disable-gpu', // 禁用 GPU 硬件加速
                 '--disable-web-security', // 禁用 web 安全
-                '--disable-features=VizDisplayCompositor' // 禁用 VizDisplayCompositor
+                '--disable-features=VizDisplayCompositor', // 禁用 VizDisplayCompositor
+                '--memory-pressure-off', // 关闭内存压力检测
+                '--max_old_space_size=512', // 限制V8内存使用
+                '--disable-background-timer-throttling', // 禁用后台定时器节流
+                '--disable-backgrounding-occluded-windows', // 禁用后台窗口
+                '--disable-renderer-backgrounding', // 禁用渲染器后台
+                '--disable-extensions', // 禁用扩展
+                '--disable-plugins', // 禁用插件
+                '--disable-default-apps', // 禁用默认应用
+                '--disable-background-networking', // 禁用后台网络
+                '--disable-sync', // 禁用同步
+                '--single-process' // 单进程模式（低内存环境）
             ],
             headless: true, // 无头模式
-            protocolTimeout: 120000 // 设置协议超时
+            protocolTimeout: 60000, // 降低协议超时
+            defaultViewport: { width: 1920, height: 1080 } // 设置默认视口
         }
     });
 
@@ -76,6 +93,40 @@ async function initCluster() {
     });
 
     console.log('Puppeteer 集群已启动');
+}
+
+// 请求限流函数
+function acquireRequestSlot(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (activeRequests < maxActiveRequests) {
+            activeRequests++;
+            resolve();
+        } else {
+            // 添加到队列
+            requestQueue.push({ resolve, reject });
+
+            // 设置超时，避免无限等待
+            setTimeout(() => {
+                const index = requestQueue.findIndex(item => item.resolve === resolve);
+                if (index !== -1) {
+                    requestQueue.splice(index, 1);
+                    reject(new Error('请求队列超时，服务器繁忙，请稍后重试'));
+                }
+            }, 30000); // 30秒超时
+        }
+    });
+}
+
+// 释放请求槽位
+function releaseRequestSlot() {
+    activeRequests--;
+    if (requestQueue.length > 0) {
+        const next = requestQueue.shift();
+        if (next) {
+            activeRequests++;
+            next.resolve();
+        }
+    }
 }
 
 // 生成请求唯一标识符
@@ -94,11 +145,15 @@ async function processRequest(body) {
         return cachedResult; // 返回缓存结果
     }
 
-    // 根据语言初始化链接
-    let language = body?.language;
-    if (language) {
-        url = url.replace('zh',language)
-    }
+    // 获取请求槽位
+    await acquireRequestSlot();
+
+    try {
+        // 根据语言初始化链接
+        let language = body?.language;
+        if (language) {
+            url = url.replace('zh',language)
+        }
 
     console.log('处理请求，内容为:', JSON.stringify(body));
     // 是否使用字体
@@ -363,7 +418,15 @@ async function processRequest(body) {
         console.warn('缓存已满，无法缓存新的结果');
     }
 
-    return result; // 返回处理结果
+        // 释放请求槽位
+        releaseRequestSlot();
+
+        return result; // 返回处理结果
+    } catch (error) {
+        // 确保在错误情况下也释放槽位
+        releaseRequestSlot();
+        throw error;
+    }
 }
 
 /**4
