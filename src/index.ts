@@ -53,13 +53,17 @@ async function initCluster() {
         concurrency: Cluster.CONCURRENCY_CONTEXT, // 使用上下文并发模式
         maxConcurrency: maxConcurrency, // 设置最大并发数
         puppeteerOptions: {
-            executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // 使用系统安装的 Chrome
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
+                           (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : undefined),
             args: [
                 '--disable-dev-shm-usage', // 禁用 /dev/shm 使用
                 '--disable-setuid-sandbox', // 禁用 setuid sandbox
                 '--no-first-run', // 禁止首次运行流程，例如导入书签，设置默认引擎等等
                 '--no-sandbox', // 禁用沙盒模式
-                '--no-zygote' // 禁用 zygote
+                '--no-zygote', // 禁用 zygote
+                '--disable-gpu', // 禁用 GPU 硬件加速
+                '--disable-web-security', // 禁用 web 安全
+                '--disable-features=VizDisplayCompositor' // 禁用 VizDisplayCompositor
             ],
             headless: true, // 无头模式
             protocolTimeout: 120000 // 设置协议超时

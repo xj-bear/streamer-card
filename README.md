@@ -2,12 +2,20 @@
 <a href="https://fastgpt.in/"><img src="./assets/logo.png" width="120" height="120" alt="fastgpt logo"></a>
 </div>
 
-<h2 align="center">流光卡片 API</h2>
+<h2 align="center">流光卡片 API (修复版)</h2>
 
-> ⚠️ **重要提示：本文档已停止更新，内容可能过时**  
-> 请访问 [飞书文档](https://ew6rccvpnmz.feishu.cn/wiki/KcAUwM0I2iIiuekzbvZcGHVlndb) 查看最新使用文档
+> ✅ **修复版本说明**
+> 本版本修复了长内容截取不完整的问题，现在可以完整显示包括二维码在内的所有内容。
 
 通过流光卡片 API 你可以通过使用将精美卡片生成对接到您的程序，或者业务流中，例如批量生成精美卡片营销内容等等
+
+## 🔧 修复内容
+
+- ✅ 修复长内容卡片截取不完整问题
+- ✅ 优化图片加载等待机制
+- ✅ 增强内容完整性检查
+- ✅ 改进Docker部署配置
+- ✅ 支持Linux服务器部署
 
 <p align="center">
   <a href="./README_en.md">English</a> |
@@ -69,26 +77,54 @@ sudo yum install wqy-zenhei-fonts.noarch -y
 
 保姆级教程：Linux (Ubuntu) 部署流光卡片开源 API：https://blog.csdn.net/weixin_46184095/article/details/140297726
 
-### Docker 执行
+### Docker 部署 (推荐)
 
-#### docker cli
-
-#### 编译
+#### 方式一：使用 docker-compose (推荐)
 
 ```bash
-docker build -t ygh3279799773/streamer-card:latest .
+# 克隆项目
+git clone https://github.com/你的用户名/streamer-card.git
+cd streamer-card
+
+# 使用 docker-compose 启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
 ```
 
-#### 运行
+#### 方式二：使用 docker cli
 
 ```bash
-docker run -d --name streamer-card -p 3003:3003 --restart always ygh3279799773/streamer-card:latest
-```
+# 编译镜像
+docker build -t streamer-card:latest .
 
-#### 停止
+# 运行容器
+docker run -d \
+  --name streamer-card \
+  -p 3003:3003 \
+  --restart unless-stopped \
+  --memory=1g \
+  streamer-card:latest
 
-```bash
+# 停止容器
 docker stop streamer-card
+```
+
+#### 健康检查
+
+```bash
+# 检查服务状态
+curl http://localhost:3003/api
+
+# 测试图片生成
+curl -X POST http://localhost:3003/api/saveImg \
+  -H "Content-Type: application/json" \
+  -d @test_long_content.json \
+  -o test_output.png
 ```
 
 ##### 使用方式
