@@ -1,7 +1,7 @@
 services:
-  streamer-card:
+  streamer-card-hp:
     build: .
-    container_name: streamer-card
+    container_name: streamer-card-high-performance
     ports:
       - "9200:3003"
     environment:
@@ -9,21 +9,14 @@ services:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       - NODE_OPTIONS=--max-old-space-size=1024
-      # 标准配置优化参数
+      # 高性能配置优化参数
       - LOW_SPEC_MODE=false
-      - MAX_CONCURRENCY=2
-      - PROTOCOL_TIMEOUT=60000
-      - NAVIGATION_TIMEOUT=120000
-      - SCREENSHOT_TIMEOUT=60000
-      - IMAGE_SCALE=2
+      - MAX_CONCURRENCY=3
+      - PROTOCOL_TIMEOUT=45000
+      - NAVIGATION_TIMEOUT=90000
+      - SCREENSHOT_TIMEOUT=45000
+      - IMAGE_SCALE=1.5
       - MAX_RETRIES=2
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     deploy:
       resources:
         limits:
@@ -32,6 +25,13 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     shm_size: 512m
     ulimits:
       nofile:

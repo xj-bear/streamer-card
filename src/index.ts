@@ -20,9 +20,18 @@ let url = 'https://fireflycard.shushiai.com/zh/reqApi'; // 要访问的目标 UR
 // let url = 'http://localhost:3001/zh/reqApi'; // 要访问的目标 URL
 // 低配置模式优化参数
 const isLowSpecMode = process.env.LOW_SPEC_MODE === 'true';
-const scale = isLowSpecMode ? 1 : (parseInt(process.env.IMAGE_SCALE || '2')); // 低配置模式使用1x缩放
+const scale = isLowSpecMode ? 1 : (parseFloat(process.env.IMAGE_SCALE || '2')); // 低配置模式使用1x缩放，支持小数
 const maxRetries = isLowSpecMode ? 1 : (parseInt(process.env.MAX_RETRIES || '2')); // 低配置模式减少重试
 const maxConcurrency = isLowSpecMode ? 1 : (parseInt(process.env.MAX_CONCURRENCY || (process.env.NODE_ENV === 'production' ? '2' : '5'))); // 低配置模式单并发
+
+// 启动时显示配置信息
+console.log('🚀 Streamer Card Service Configuration:');
+console.log(`  - Low Spec Mode: ${isLowSpecMode}`);
+console.log(`  - Image Scale: ${scale}`);
+console.log(`  - Max Concurrency: ${maxConcurrency}`);
+console.log(`  - Max Retries: ${maxRetries}`);
+console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
+
 const app = express(); // 创建 Express 应用
 
 // 配置 CORS 中间件，允许所有跨域请求
