@@ -1,0 +1,18 @@
+{
+  "temp": "tempA",
+  "color": "light-blue-color-1",
+  "title": "Test",
+  "date": "2025/7/14",
+  "content": "Test",
+  "foreword": "Test",
+  "author": "Test",
+  "qrcodetitle": "QR",
+  "qrcodetext": "Test",
+  "qrcode": "https://google.com",
+  "watermark": "Test",
+  "switchConfig": {
+    "showIcon": "false",
+    "showForeword": "true",
+    "showQRCode": "true"
+  }
+}

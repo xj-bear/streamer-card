@@ -18,9 +18,11 @@ const md = new MarkdownIt({
 const port = 3003; // 设置服务器监听端口
 let url = 'https://fireflycard.shushiai.com/zh/reqApi'; // 要访问的目标 URL
 // let url = 'http://localhost:3001/zh/reqApi'; // 要访问的目标 URL
-const scale = 2; // 设置截图的缩放比例，图片不清晰就加大这个数值
-const maxRetries = 2; // 设置请求重试次数，降低重试次数
-const maxConcurrency = process.env.NODE_ENV === 'production' ? 2 : 5; // 生产环境降低并发数
+// 低配置模式优化参数
+const isLowSpecMode = process.env.LOW_SPEC_MODE === 'true';
+const scale = isLowSpecMode ? 1 : (parseInt(process.env.IMAGE_SCALE || '2')); // 低配置模式使用1x缩放
+const maxRetries = isLowSpecMode ? 1 : (parseInt(process.env.MAX_RETRIES || '2')); // 低配置模式减少重试
+const maxConcurrency = isLowSpecMode ? 1 : (parseInt(process.env.MAX_CONCURRENCY || (process.env.NODE_ENV === 'production' ? '2' : '5'))); // 低配置模式单并发
 const app = express(); // 创建 Express 应用
 
 // 配置 CORS 中间件，允许所有跨域请求
@@ -59,30 +61,36 @@ async function initCluster() {
         maxConcurrency: maxConcurrency, // 设置最大并发数
         puppeteerOptions: {
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
-                           (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : undefined),
+                           (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' :
+                            process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined),
             args: [
-                '--disable-dev-shm-usage', // 禁用 /dev/shm 使用
-                '--disable-setuid-sandbox', // 禁用 setuid sandbox
-                '--no-first-run', // 禁止首次运行流程
-                '--no-sandbox', // 禁用沙盒模式
-                '--no-zygote', // 禁用 zygote
-                '--disable-gpu', // 禁用 GPU 硬件加速
-                '--disable-web-security', // 禁用 web 安全
-                '--disable-features=VizDisplayCompositor', // 禁用 VizDisplayCompositor
-                '--memory-pressure-off', // 关闭内存压力检测
-                '--max_old_space_size=512', // 限制V8内存使用
-                '--disable-background-timer-throttling', // 禁用后台定时器节流
-                '--disable-backgrounding-occluded-windows', // 禁用后台窗口
-                '--disable-renderer-backgrounding', // 禁用渲染器后台
-                '--disable-extensions', // 禁用扩展
-                '--disable-plugins', // 禁用插件
-                '--disable-default-apps', // 禁用默认应用
-                '--disable-background-networking', // 禁用后台网络
-                '--disable-sync', // 禁用同步
-                '--single-process' // 单进程模式（低内存环境）
+                // Docker环境必需参数
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+
+                // 基础headless配置
+                '--disable-gpu',
+                '--disable-web-security',
+                '--no-first-run',
+                '--disable-extensions',
+                '--disable-default-apps',
+                '--hide-scrollbars',
+                '--mute-audio',
+
+                // 性能优化
+                '--disable-background-networking',
+                '--disable-background-timer-throttling',
+                '--disable-renderer-backgrounding',
+                '--disable-backgrounding-occluded-windows',
+
+                // 功能禁用
+                '--disable-translate',
+                '--disable-sync',
+                '--disable-plugins'
             ],
             headless: true, // 无头模式
-            protocolTimeout: 60000, // 降低协议超时
+            protocolTimeout: isLowSpecMode ? 30000 : (parseInt(process.env.PROTOCOL_TIMEOUT || '60000')), // 低配置模式降低协议超时
             defaultViewport: { width: 1920, height: 1080 } // 设置默认视口
         }
     });
@@ -221,8 +229,8 @@ async function processRequest(body) {
         console.log('视口设置为:', viewPortConfig);
 
         await page.goto(url, {
-            timeout: 120000, // 设置导航超时
-            waitUntil: ['load', 'networkidle2'] // 等待页面加载完成
+            timeout: isLowSpecMode ? 60000 : (parseInt(process.env.NAVIGATION_TIMEOUT || '120000')), // 低配置模式降低导航超时
+            waitUntil: isLowSpecMode ? ['load'] : ['load', 'networkidle2'] // 低配置模式简化等待条件
         });
         console.log('页面已导航至:', url);
 
@@ -402,7 +410,7 @@ async function processRequest(body) {
                 height: finalBoundingBox.height,
                 scale: imgScale // 设置截图缩放比例
             },
-            timeout: 60000, // 设置截图超时
+            timeout: isLowSpecMode ? 30000 : (parseInt(process.env.SCREENSHOT_TIMEOUT || '60000')), // 低配置模式降低截图超时
         });
         console.log('截图已捕获');
 

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "start:prod": "node dist/index.js"
   },
   "dependencies": {
     "@types/cors": "^2.8.17",

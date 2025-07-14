@@ -1,0 +1,18 @@
+{
+  "temp": "tempA",
+  "color": "light-blue-color-1",
+  "title": "Docker Test",
+  "date": "2025/7/14",
+  "content": "Simple Docker test",
+  "foreword": "Docker",
+  "author": "Test",
+  "qrcodetitle": "QR",
+  "qrcodetext": "Test",
+  "qrcode": "https://example.com",
+  "watermark": "Docker",
+  "switchConfig": {
+    "showIcon": "false",
+    "showForeword": "true",
+    "showQRCode": "true"
+  }
+}

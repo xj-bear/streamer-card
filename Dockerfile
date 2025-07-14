@@ -1,8 +1,8 @@
-FROM node:20-alpine
+FROM node:20-alpine3.19
 
 LABEL authors="xj-bear"
 
-# 安装 Chromium 和中文字体支持
+# 安装 Chromium 和中文字体支持，以及Docker环境必要的依赖
 RUN apk update && apk add --no-cache \
     chromium \
     nss \
@@ -11,11 +11,29 @@ RUN apk update && apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    wqy-zenhei
+    wqy-zenhei \
+    dbus \
+    xvfb \
+    xvfb-run \
+    font-noto-cjk \
+    font-noto-emoji \
+    udev \
+    wget \
+    procps \
+    && rm -rf /var/cache/apk/*
+
+# 创建必要的目录和配置
+RUN mkdir -p /run/dbus \
+    && mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix
 
 # 设置 Puppeteer 使用系统安装的 Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV DISPLAY=:99
+ENV PUPPETEER_TIMEOUT=120000
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROME_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
@@ -39,6 +57,29 @@ RUN adduser -S nodejs -u 1001
 
 # 更改文件所有权
 RUN chown -R nodejs:nodejs /app
+
+# 创建启动脚本
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# 清理可能存在的显示锁文件' >> /app/start.sh && \
+    echo 'rm -f /tmp/.X99-lock' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# 启动虚拟显示' >> /app/start.sh && \
+    echo 'Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &' >> /app/start.sh && \
+    echo 'export DISPLAY=:99' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# 等待显示启动' >> /app/start.sh && \
+    echo 'sleep 3' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# 启动应用' >> /app/start.sh && \
+    echo 'exec node dist/index.js' >> /app/start.sh && \
+    chmod +x /app/start.sh
+
 USER nodejs
 
-CMD [ "node", "dist/index.js" ]
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3003/api || exit 1
+
+CMD ["/app/start.sh"]

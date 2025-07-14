@@ -5,7 +5,7 @@ services:
     build: .
     container_name: streamer-card-prod
     ports:
-      - "3003:3003"
+      - "9200:3003"
     environment:
       - NODE_ENV=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser

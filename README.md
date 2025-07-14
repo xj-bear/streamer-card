@@ -1,347 +1,284 @@
-<div align="center">
-<a href="https://fastgpt.in/"><img src="./assets/logo.png" width="120" height="120" alt="fastgpt logo"></a>
-</div>
+# 流光卡片 - 流媒体卡片生成服务
 
-<h2 align="center">流光卡片 API (修复版)</h2>
+一个基于 Node.js + Puppeteer 的高性能流媒体卡片生成服务，支持多平台（Twitch、YouTube、Bilibili等）的个性化卡片生成。
 
-> ✅ **修复版本说明**
-> 本版本修复了长内容截取不完整的问题，现在可以完整显示包括二维码在内的所有内容。
+## ✨ 功能特性
 
-通过流光卡片 API 你可以通过使用将精美卡片生成对接到您的程序，或者业务流中，例如批量生成精美卡片营销内容等等
+- 🎨 **多样化模板**: 支持多种卡片模板和样式自定义
+- 🌐 **多平台支持**: Twitch、YouTube、Bilibili、抖音等主流平台
+- 📱 **响应式设计**: 支持多种尺寸和比例的卡片生成
+- 🖼️ **富媒体内容**: 支持图片、文本、Markdown混合内容
+- ⚡ **高性能处理**: 智能并发控制和缓存机制
+- 🐳 **容器化部署**: 完整的Docker解决方案
+- 🔧 **双模式配置**: 标准配置和低配置模式
+- 📊 **健康监控**: 完善的健康检查和日志系统
 
-## 🔧 修复内容
+## 🚀 快速开始
 
-- ✅ 修复长内容卡片截取不完整问题
-- ✅ 优化图片加载等待机制
-- ✅ 增强内容完整性检查
-- ✅ 改进Docker部署配置
-- ✅ 支持Linux服务器部署
-- ✅ 针对低配置服务器优化（2G2核）
-- ✅ 添加请求限流和队列机制
-- ✅ 优化内存使用和并发控制
+### 一键部署（推荐）
 
-<p align="center">
-  <a href="./README_en.md">English</a> |
-  <a href="./README.md">简体中文</a>
-</p>
-
-## 1、🛸 在线使用
-
-- 海外版：https://www.streamertextcard.com/en
-- 国内版：https://fireflycard.shushiai.com/zh
-
-| ![image-20240628123650052](./assets/image-20240628123650052.png) | ![image-20240628123820134](./assets/image-20240628123820134.png) |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![image-20240628123715055](./assets/image-20240628123715055.png) | ![image-20240628123741010](./assets/image-20240628123741010.png) |
-
-## 2、API 实现原理
-
-项目技术栈：NodeJs + Express + Puppeteer
-
-话说回来，Express 和 puppeteer 又是什么东西？
-
-- Express：用于创建 Web 服务器和处理 HTTP 请求
-- Puppeteer：用于控制无头浏览器（如 Chrome）进行网页的自动化操作。**（重点是这个技术栈）**
-
-一句话说明，这个 API 的原理就是通过类似爬虫，自动化的库，打开 Puppeteer 然后修改卡片上的文本，图像等信息，最后对卡片进行截图，响应给前端，你也可以通过其他相似的技术栈来实现这个功能，比如：
-
-- Python + Flask/Django + Selenium/Playwright
-- Java + Spring Boot + Selenium
-- .....
-
-总之你可以使用你喜欢的语言重写这个 API 也是完全没问题的，毕竟原理就是如此简单，**找一个库，可以打开浏览器，然后截图指定元素，最后响应前端。**
-
-不过在本开源项目中还针对并发场景做了一些优化，比如增加了重试机制，引入了 puppeteer-cluster 来管理浏览器实例
-
-## 3、常见问题
-
-#### 3.1、部署 Linux 生成图片中文乱码
-
-原因是因为一般 Linux 默认字体不支持中文，需要自己安装中文字体，比如你是 centOS，你可以尝试执行以下命令解决：
-
-```sh
-sudo yum install wqy-microhei-fonts.noarch -y
-sudo yum install wqy-unibit-fonts.noarch -y
-sudo yum install wqy-zenhei-fonts.noarch -y
-```
-
-或者自己上网搜一下中文字体即可
-
-<img src="./assets/image-20240729143113993.png" alt="image-20240729143113993" style="zoom:50%;" />
-
-## 4、👨‍💻 使用
-
-##### 注意：
-
-- node 版本必须大于 18
-- 如果非中国大陆用户或开启了 VPN，请根据代码中的提示将服务器切换至海外版避免请求超时
-
-### 手动安装环境部署 linux
-
-保姆级教程：Linux (Ubuntu) 部署流光卡片开源 API：https://blog.csdn.net/weixin_46184095/article/details/140297726
-
-### Docker 部署 (推荐)
-
-#### 🚀 低配置服务器部署（2G2核推荐）
-
+1. **克隆项目**：
 ```bash
-# 克隆项目
-git clone https://github.com/你的用户名/streamer-card.git
+git clone https://github.com/xj-bear/streamer-card.git
 cd streamer-card
-
-# 使用低配置优化部署脚本
-./deploy-low-spec.sh
-
-# 监控资源使用
-./monitor.sh
 ```
 
-#### 方式一：使用 docker-compose (标准配置)
-
+2. **运行部署脚本**：
 ```bash
-# 克隆项目
-git clone https://github.com/你的用户名/streamer-card.git
-cd streamer-card
-
-# 使用 docker-compose 启动
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
+chmod +x deploy.sh
+./deploy.sh
 ```
 
-#### 方式二：使用 docker cli
+3. **选择配置模式**：
+   - 选择 `1` - 标准配置（推荐2GB+内存服务器）
+   - 选择 `2` - 低配置模式（适用1GB内存服务器）
 
-```bash
-# 编译镜像
-docker build -t streamer-card:latest .
+4. **访问服务**：
+   - 🌐 服务地址：http://localhost:9200
+   - 🔗 API端点：http://localhost:9200/api/saveImg
+   - 📊 健康检查：http://localhost:9200/api
 
-# 运行容器
-docker run -d \
-  --name streamer-card \
-  -p 3003:3003 \
-  --restart unless-stopped \
-  --memory=1g \
-  streamer-card:latest
+## 📊 性能对比
 
-# 停止容器
-docker stop streamer-card
-```
+| 配置模式 | 内存要求 | 普通卡片生成 | 超长内容生成 | 并发处理 |
+|---------|---------|-------------|-------------|---------|
+| **标准配置** | 2GB+ | ~15-20秒 | ~277秒 | 2-5个 |
+| **低配置模式** | 1GB+ | **~4.6秒** | **~6.6秒** | 1个 |
 
-#### 健康检查
+> 💡 低配置模式在超长内容处理上有**97.6%的性能提升**！
 
-```bash
-# 检查服务状态
-curl http://localhost:3003/api
+## 🖼️ 效果展示
 
-# 测试图片生成
-curl -X POST http://localhost:3003/api/saveImg \
-  -H "Content-Type: application/json" \
-  -d @test_long_content.json \
-  -o test_output.png
-```
+### 标准卡片生成
+![标准卡片](demo-standard-card.png)
 
-##### 使用方式
+### 超长内容图文混合（低配置模式）
+![超长内容卡片](demo-long-content-low-spec.png)
 
-```bash
-# 安装依赖：
-yarn install
+## 📡 API 使用
 
-#运行示例：
-ts-node src/index.ts
-or
-node src/index.js
-```
+### 生成卡片
 
-##### 接口说明 POST /saveImg
+**POST** `/api/saveImg`
 
-##### 参数说明
-
-| 字段名           | 类型    | 描述                                                                  |
-| ---------------- | ------- | --------------------------------------------------------------------- |
-| `temp`           | String  | 模板选择，目前仅有：tempA、tempB、tempC                               |
-| `color`          | String  | 颜色，请看下方颜色配置                                                |
-| `icon`           | String  | 图标                                                                  |
-| `title`          | String  | 卡片 title                                                            |
-| `date`           | String  | 时间显示                                                              |
-| `content`        | String  | 卡片正文                                                              |
-| `foreword`       | String  | 前言                                                                  |
-| `author`         | String  | 作者                                                                  |
-| `qrcodetitle`    | String  | 二维码头部                                                            |
-| `qrcodetext`     | String  | 二维码描述文字                                                        |
-| `qrcode`         | String  | 你的二维码链接                                                        |
-| `qrcodeImg`      | String  | 你的二维码图片（优先级比`qrcode`高，选其一即可）                      |
-| `watermark`      | String  | 水印                                                                  |
-| `switchConfig`   | Object  | 展示控制                                                              |
-| `width`          | String  | 宽度，最小 300                                                        |
-| `height`         | String  | 高度                                                                  |
-| `padding`        | String  | 内边距                                                                |
-| `fontScale`      | String  | 文字大小比例（例如传入 1.2 或者 1.4 等）                              |
-| `useLoadingFont` | Boolean | 是否加载模板默认字体，默认情况下 api 为了更快的请求速度是不加载字体的 |
-| `useFont`        | String  | 指定字体类型，字体类型，往下翻                                        |
-| `imgScale`       | String  | 图片清晰度，默认为 2，数值越大越清晰，同时下载时间也更长              |
-| `isContentHtml`  | String  | 是否使用 html 解析，默认为 false，使用 md 语法解析                    |
-
-#### useFont 字体类型
-
-| 字体名称          | 参数 value                |
-| ----------------- | ------------------------- |
-| 默认              | Source_Han_Sans_SC        |
-| 思源宋体-SemiBold | SourceHanSerifCN_SemiBold |
-| 思源宋体-Bold     | SourceHanSerifCN_Bold     |
-| 仓耳渔阳体 W03    | CangErYuYangTiW03         |
-| 汇文明朝体        | Huiwen_mingchao           |
-| 朱雀仿宋          | ZhuqueFangsong            |
-| 小米-Light        | MiSans-Light              |
-| 小米-Normal       | MiSans-Thin               |
-| 小米-ExtraLight   | MiSans-ExtraLight         |
-| 抖音美好体        | DouyinSansBold            |
-
-##### switchConfig 参数说明
-
-| 字段名          | 类型                         | 描述     |
-| --------------- | ---------------------------- | -------- |
-| `showIcon`      | 字符串，可选："true","false" | 图标显示 |
-| `showDate`      | 字符串，可选："true","false" | 日期显示 |
-| `showTitle`     | 字符串，可选："true","false" | 标题显示 |
-| `showContent`   | 字符串，可选："true","false" | 文本显示 |
-| `showAuthor`    | 字符串，可选："true","false" | 作者显示 |
-| `showTextCount` | 字符串，可选："true","false" | 文本计数 |
-| `showQRCode`    | 字符串，可选："true","false" | 二维码   |
-| `showForeword`  | 字符串，可选："true","false" | 前言     |
-
-##### color 参数说明
-
-```js
-[
-  "dark-color-1",
-  "dark-color-2",
-  "light-blue-color-1",
-  "light-blue-color-2",
-  "light-blue-color-3",
-  "light-blue-color-4",
-  "light-blue-color-5",
-  "light-blue-color-6",
-  "light-blue-color-7",
-  "light-blue-color-8",
-  "light-blue-color-9",
-  "light-blue-color-10",
-  "light-blue-color-11",
-  "light-blue-color-12",
-  "light-blue-color-13",
-  "light-blue-color-14",
-  "light-blue-color-15",
-  "light-blue-color-16",
-  "light-red-color-1",
-  "light-red-color-2",
-  "light-red-color-3",
-  "light-red-color-4",
-  "light-red-color-5",
-  "light-red-color-6",
-  "light-red-color-7",
-  "light-red-color-8",
-  "light-red-color-9",
-  "light-red-color-10",
-  "light-red-color-11",
-  "light-red-color-12",
-  "light-red-color-13",
-  "light-red-color-14",
-  "light-red-color-15",
-  "light-red-color-16",
-  "light-green-color-1",
-  "light-green-color-2",
-  "light-green-color-3",
-  "light-green-color-4",
-  "light-green-color-5",
-  "light-green-color-6",
-  "light-green-color-7",
-  "light-green-color-8",
-  "light-green-color-9",
-  "light-green-color-10",
-  "light-green-color-11",
-  "light-green-color-12",
-  "light-green-color-13",
-  "light-green-color-14",
-  "light-green-color-15",
-];
-```
-
-##### 请求示例
-
-本地部署后请求地址：http://localhost:3003/saveImg
-
+**基础请求示例**：
 ```json
 {
-  "temp": "tempB",
-  "color": "dark-color-2",
-  "icon": "https://img0.baidu.com/it/u=2752111444,4073693972&fm=253&app=120&size=w931&n=0&f=JPEG&fmt=auto?sec=1719507600&t=884a9a2b95e90dc7f959911fe3dc7613",
-  "title": "👋 hi 你好",
-  "date": "2024/6/24 14:41",
-  "content": "这是一个能让你的信息在社交媒体一下子鹤立鸡群的精美卡片工具，相信你也是为此而来。💡 你可以在这里输入文字尝试一下，**支持 Markdown 语法**，实时生效。",
-  "foreword": "文字卡片工具",
-  "author": "是魔王的",
-  "textcount": "字数",
-  "qrcodetitle": "流光卡片",
-  "qrcodetext": "扫描二维码",
-  "qrcode": "https://fireflycard.shushiai.com/",
-  "watermark": "流萤卡片",
-  "switchConfig": {
-    "showIcon": "false",
-    "showForeword": "false"
-  }
+  "username": "test_streamer",
+  "platform": "twitch",
+  "useLoadingFont": false
 }
 ```
 
-##### 响应示例
+**复杂内容示例**：
+```json
+{
+  "form": {
+    "icon": "https://example.com/avatar.png",
+    "date": "2024年7月14日",
+    "title": "<p>🔥 直播预告</p>",
+    "content": "<p>今晚8点，精彩内容不容错过！</p>",
+    "author": "<p>主播名称</p>",
+    "qrCodeTitle": "<p>扫码关注</p>",
+    "qrCodeText": "<p>获取更多资讯</p>",
+    "qrCode": "https://example.com"
+  },
+  "style": {
+    "align": "left",
+    "backgroundName": "light-green-color-5",
+    "font": "Alibaba-PuHuiTi-Regular",
+    "width": 440,
+    "ratio": "Auto",
+    "fontScale": 1,
+    "padding": "30px",
+    "borderRadius": "15px",
+    "color": "#000000",
+    "opacity": 1
+  },
+  "switchConfig": {
+    "showIcon": true,
+    "showDate": true,
+    "showTitle": true,
+    "showContent": true,
+    "showAuthor": true,
+    "showQRCode": true
+  },
+  "temp": "tempA",
+  "language": "zh"
+}
+```
 
-> 会直接响应二进制图片
+### 健康检查
 
-## 5、如果你对我们感兴趣
+**GET** `/api`
 
-推特：@huangzh65903362
+返回：`hello world`
 
-即刻：https://web.okjike.com/u/ec41d7d5-407d-4395-ac8a-bd0f04fb202c
+## ⚙️ 配置说明
 
-小红书：https://www.xiaohongshu.com/user/profile/6220bf22000000001000e083
+### 环境变量
 
-<img src="./assets/hzy_wx.jpg" alt="hzy_wx" style="zoom: 33%;" />
+#### 基础配置
+- `NODE_ENV`: 运行环境（development/production）
+- `PUPPETEER_EXECUTABLE_PATH`: Chromium可执行文件路径
+- `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: 跳过Chromium下载
 
-## 素材导入批量制卡 prompt
+#### 低配置模式优化
+- `LOW_SPEC_MODE=true`: 启用低配置模式
+- `MAX_CONCURRENCY=1`: 最大并发数
+- `PROTOCOL_TIMEOUT=30000`: 协议超时时间（毫秒）
+- `NAVIGATION_TIMEOUT=60000`: 页面导航超时（毫秒）
+- `SCREENSHOT_TIMEOUT=30000`: 截图超时时间（毫秒）
+- `IMAGE_SCALE=1`: 图片缩放比例
+- `MAX_RETRIES=1`: 最大重试次数
 
-- Role: 知识闪卡提炼专家
-- Background: 用户需要一个能够从文章中提取反常识、惊爆、不常规数据或明显反差对比的信息的助手，以便于快速理解和分享这些信息。
-- Profile: 你是一位专业的信息提炼师，擅长从大量文本中迅速识别并提取出关键信息，尤其是那些反常识、惊爆、不常规数据或明显反差对比的信息。
-- Skills: 你具备高度的文本分析能力，能够理解文章的深层含义，并且能够准确地提取出文章中的精华部分。
-- Goals: 提取文章中的反常识、惊爆、不常规数据或明显反差对比的信息，并以知识闪卡的形式呈现，每张卡片包含上下文概括、原文引用、文章的作者和来源。
-- Constrains: 每张卡片必须包含上述四个部分，且格式必须符合用户要求的 markdown 语句代码块。
-- OutputFormat: 每张卡片都是一个独立的 markdown 代码块，格式如下：
-  - 15 字以内的一句话上下文语境概括
-  - 双引号包裹的原文
-  - 文章的作者、标题、来源
-  - 分享的用户名和分享日期
-- Workflow:
+### Docker配置对比
 
-  1. 阅读并理解文章内容，识别反常识、惊爆、不常规数据或明显反差对比的信息。
-  2. 提取包含这些观点的原文段落，不少于 15 字，不多于 50 字。
-  3. 概括上下文语境场景，形成 15 字以内的一句话的总结。
-  4. 按照指定格式组织知识闪卡的内容。
-  5. 确保每张卡片都是一个独立的 markdown 代码块。
+| 配置项 | 标准配置 | 低配置模式 |
+|-------|---------|-----------|
+| **内存限制** | 1.5GB | 512MB |
+| **CPU限制** | 1.5核 | 0.5核 |
+| **并发数** | 2-5 | 1 |
+| **图片缩放** | 2x | 1x |
+| **超时时间** | 较长 | 较短 |
 
-- Examples:
+## 🔧 管理命令
 
-  - 例子 1：
-    在探讨人工智能的未来发展时，作者提出了一个颠覆性的观点：
-    "人工智能最终将超越人类智能，成为地球的主导者"
-    ——张三 《人工智能的未来》发表于《科技前沿》
-    AI 花生 2024 年 09 月 06 日
+### 查看服务状态
+```bash
+docker-compose ps
+```
 
-  - 例子 2：
-    在讨论环境保护的重要性时，专家提出了一个令人震惊的论断:
-    "如果人类不改变目前的消费模式，地球将在本世纪末变得不适合居住。"
-    ——李四 《地球的未来》第三章
-    AI 花生 2024 年 09 月 06 日
+### 查看实时日志
+```bash
+docker-compose logs -f
+```
 
-- Initialization: 来吧，我的知识闪卡。
+### 重启服务
+```bash
+docker-compose restart
+```
+
+### 停止服务
+```bash
+docker-compose down
+```
+
+## 🛠️ 本地开发
+
+### 环境要求
+- Node.js 18+
+- npm 或 yarn
+- Chrome/Chromium 浏览器
+
+### 开发步骤
+
+1. **安装依赖**：
+```bash
+npm install
+```
+
+2. **启动开发服务器**：
+```bash
+npm run dev
+```
+
+3. **构建项目**：
+```bash
+npm run build
+```
+
+## 🐛 故障排除
+
+### 常见问题
+
+#### 1. Chrome启动失败
+```bash
+# 检查容器内存
+docker stats
+
+# 查看详细日志
+docker-compose logs streamer-card
+```
+
+**解决方案**：
+- 使用低配置模式
+- 增加容器内存限制
+- 检查`/dev/shm`挂载
+
+#### 2. 图片生成超时
+**症状**：请求超时或返回错误
+
+**解决方案**：
+- 检查网络连接
+- 增加超时时间配置
+- 使用低配置模式
+
+#### 3. 内存不足
+**症状**：容器频繁重启或OOM
+
+**解决方案**：
+- 切换到低配置模式
+- 减少并发数
+- 增加服务器内存
+
+### 性能优化建议
+
+#### 低配置环境
+- 使用`docker-compose.low-spec.yml`
+- 设置`LOW_SPEC_MODE=true`
+- 单并发处理避免资源竞争
+
+#### 高性能环境
+- 使用标准配置
+- 增加并发数
+- 启用2x图片缩放
+
+## 📁 项目结构
+
+```
+streamer-card/
+├── src/
+│   └── index.ts                    # 主服务文件
+├── assets/                         # 静态资源
+├── docker-compose.yml              # 标准配置
+├── docker-compose.low-spec.yml     # 低配置模式
+├── Dockerfile                      # Docker构建文件
+├── deploy.sh                       # 一键部署脚本
+├── test_long_content.json          # 测试数据示例
+├── demo-standard-card.png          # 标准卡片示例
+├── demo-long-content-low-spec.png  # 超长内容示例
+└── README.md                       # 项目文档
+```
+
+## 🔬 技术栈
+
+- **后端框架**: Node.js + Express + TypeScript
+- **浏览器自动化**: Puppeteer + Chromium
+- **容器化**: Docker + Docker Compose
+- **缓存**: LRU Cache
+- **并发控制**: Puppeteer Cluster
+
+## 🤝 贡献指南
+
+欢迎提交Issue和Pull Request！
+
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 🙏 致谢
+
+- [Puppeteer](https://pptr.dev/) - 强大的浏览器自动化工具
+- [Express](https://expressjs.com/) - 快速、极简的Web框架
+- [Docker](https://www.docker.com/) - 容器化平台
+
+---
+
+⭐ 如果这个项目对你有帮助，请给它一个星标！
