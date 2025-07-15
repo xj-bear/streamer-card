@@ -72,7 +72,7 @@ RUN echo '#!/bin/sh' > /app/start.sh && \
     echo 'rm -f /tmp/.X99-lock' >> /app/start.sh && \
     echo '' >> /app/start.sh && \
     echo '# 启动虚拟显示' >> /app/start.sh && \
-    echo 'Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &' >> /app/start.sh && \
+    echo 'Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &> /dev/null &' >> /app/start.sh && \
     echo 'export DISPLAY=:99' >> /app/start.sh && \
     echo '' >> /app/start.sh && \
     echo '# 等待显示启动' >> /app/start.sh && \
