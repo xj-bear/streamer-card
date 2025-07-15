@@ -1,0 +1,46 @@
+services:
+  streamer-card:
+    build: .
+    container_name: streamer-card-performance-optimized
+    ports:
+      - "9200:3003"
+    environment:
+      - NODE_ENV=production
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - NODE_OPTIONS=--max-old-space-size=2048
+      # 性能优化配置
+      - LOW_SPEC_MODE=false
+      - MAX_CONCURRENCY=4
+      - PROTOCOL_TIMEOUT=90000
+      - NAVIGATION_TIMEOUT=180000
+      - SCREENSHOT_TIMEOUT=120000
+
+      - IMAGE_SCALE=2
+      - MAX_RETRIES=3
+      # Chrome 性能优化参数
+      - CHROME_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-accelerated-2d-canvas,--no-first-run,--no-zygote,--disable-gpu,--disable-background-timer-throttling,--disable-backgrounding-occluded-windows,--disable-renderer-backgrounding,--disable-features=TranslateUI,--disable-ipc-flooding-protection,--disable-background-networking,--disable-default-apps,--disable-extensions,--disable-sync,--metrics-recording-only,--no-default-browser-check,--no-pings,--password-store=basic,--use-mock-keychain,--disable-component-extensions-with-background-pages,--disable-component-update,--disable-web-security,--allow-running-insecure-content,--disable-features=VizDisplayCompositor,--enable-features=NetworkService,--force-color-profile=srgb,--disable-blink-features=AutomationControlled
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    shm_size: 1g
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - /tmp:/tmp
+    tmpfs:
+      - /tmp:noexec,nosuid,size=512m

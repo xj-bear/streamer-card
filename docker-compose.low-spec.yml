@@ -12,9 +12,9 @@ services:
       # 低配置优化环境变量
       - LOW_SPEC_MODE=true
       - MAX_CONCURRENCY=1
-      - PROTOCOL_TIMEOUT=30000
-      - NAVIGATION_TIMEOUT=60000
-      - SCREENSHOT_TIMEOUT=30000
+      - PROTOCOL_TIMEOUT=45000
+      - NAVIGATION_TIMEOUT=90000
+      - SCREENSHOT_TIMEOUT=60000
       - IMAGE_SCALE=1
       - MAX_RETRIES=1
     restart: unless-stopped

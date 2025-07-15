@@ -68,6 +68,7 @@ async function initCluster() {
     cluster = await Cluster.launch({
         concurrency: Cluster.CONCURRENCY_CONTEXT, // 使用上下文并发模式
         maxConcurrency: maxConcurrency, // 设置最大并发数
+        timeout: parseInt(process.env.PROTOCOL_TIMEOUT || (isLowSpecMode ? '120000' : '60000')), // 设置任务超时
         puppeteerOptions: {
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ||
                            (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' :
@@ -96,10 +97,20 @@ async function initCluster() {
                 // 功能禁用
                 '--disable-translate',
                 '--disable-sync',
-                '--disable-plugins'
+                '--disable-plugins',
+
+                // 低配置模式额外优化
+                ...(isLowSpecMode ? [
+                    '--memory-pressure-off',
+                    '--disable-features=VizDisplayCompositor',
+                    '--disable-ipc-flooding-protection',
+                    '--disable-background-media-suspend',
+                    '--disable-component-extensions-with-background-pages',
+                    '--disable-client-side-phishing-detection'
+                ] : [])
             ],
             headless: true, // 无头模式
-            protocolTimeout: isLowSpecMode ? 30000 : (parseInt(process.env.PROTOCOL_TIMEOUT || '60000')), // 低配置模式降低协议超时
+            protocolTimeout: parseInt(process.env.PROTOCOL_TIMEOUT || (isLowSpecMode ? '45000' : '60000')), // 使用环境变量配置的协议超时
             defaultViewport: { width: 1920, height: 1080 } // 设置默认视口
         }
     });
@@ -129,7 +140,7 @@ function acquireRequestSlot(): Promise<void> {
                     requestQueue.splice(index, 1);
                     reject(new Error('请求队列超时，服务器繁忙，请稍后重试'));
                 }
-            }, 30000); // 30秒超时
+            }, parseInt(process.env.PROTOCOL_TIMEOUT || (isLowSpecMode ? '120000' : '60000'))); // 使用环境变量配置的超时
         }
     });
 }
@@ -238,12 +249,13 @@ async function processRequest(body) {
         console.log('视口设置为:', viewPortConfig);
 
         await page.goto(url, {
-            timeout: isLowSpecMode ? 60000 : (parseInt(process.env.NAVIGATION_TIMEOUT || '120000')), // 低配置模式降低导航超时
-            waitUntil: isLowSpecMode ? ['load'] : ['load', 'networkidle2'] // 低配置模式简化等待条件
+            timeout: parseInt(process.env.NAVIGATION_TIMEOUT || (isLowSpecMode ? '90000' : '120000')), // 使用环境变量配置的导航超时
+            waitUntil: isLowSpecMode ? ['load'] : ['load', 'domcontentloaded'] // 优化等待条件，使用domcontentloaded替代networkidle2
         });
         console.log('页面已导航至:', url);
 
-        await delay(3000)
+        // 优化所有模式的等待时间
+        await delay(isLowSpecMode ? 1000 : 1500)
 
         // 这里因为字体是按需加载，所以前面的等待字体加载不太有效，这里增大等待时间，以免部分字体没有加载完成
         // const cardElement = await page.$(`#${body.temp || 'tempA'}`); // 查找卡片元素
@@ -304,14 +316,14 @@ async function processRequest(body) {
                         }
                     });
 
-                    // 设置超时，避免无限等待
-                    setTimeout(() => resolve(true), 10000);
+                    // 设置超时，避免无限等待，优化所有模式的等待时间
+                    setTimeout(() => resolve(true), isLowSpecMode ? 5000 : 6000);
                 });
             });
             console.log('内容图片加载完成');
 
-            // 额外等待，确保布局重新计算完成
-            await delay(2000);
+            // 额外等待，确保布局重新计算完成，优化所有模式的等待时间
+            await delay(isLowSpecMode ? 500 : 1000);
         }
 
         if (iconSrc && iconSrc.startsWith('http')) {
@@ -338,10 +350,22 @@ async function processRequest(body) {
         // 等待页面布局稳定，确保所有内容都已渲染
         await page.waitForFunction(() => {
             return document.readyState === 'complete';
-        }, { timeout: 30000 });
+        }, { timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || (isLowSpecMode ? '60000' : '60000')) });
 
-        // 额外等待确保动态内容渲染完成
-        await delay(3000);
+        // 智能等待 - 检测关键元素是否已渲染（所有模式）
+        try {
+            await page.waitForFunction(() => {
+                const cardEl = document.querySelector('.tempA');
+                const contentEl = document.querySelector('[name="showContent"]');
+                return cardEl && contentEl && contentEl.children.length > 0;
+            }, { timeout: isLowSpecMode ? 5000 : 8000 });
+            console.log('智能等待：关键元素已渲染');
+        } catch (e) {
+            console.log('智能等待超时，继续执行');
+        }
+
+        // 额外等待确保动态内容渲染完成，优化所有模式的等待时间
+        await delay(isLowSpecMode ? 1000 : 1500);
 
         const boundingBox = await cardElement.boundingBox(); // 获取卡片元素边界框
         console.log('boundingBox', boundingBox);
@@ -349,7 +373,7 @@ async function processRequest(body) {
         // 验证边界框是否合理
         if (!boundingBox || boundingBox.height < 100) {
             console.error('边界框异常，重新获取');
-            await delay(2000);
+            await delay(isLowSpecMode ? 1000 : 1500);
             const retryBoundingBox = await cardElement.boundingBox();
             console.log('重试后的boundingBox', retryBoundingBox);
             if (retryBoundingBox && retryBoundingBox.height > boundingBox?.height) {
@@ -370,8 +394,8 @@ async function processRequest(body) {
             });
             console.log('调整视口高度:', newHeight);
 
-            // 调整视口后等待重新渲染
-            await delay(2000);
+            // 调整视口后等待重新渲染，优化所有模式的等待时间
+            await delay(isLowSpecMode ? 500 : 1000);
         }
 
         // 在调整视口后重新获取边界框，确保位置准确
@@ -397,10 +421,10 @@ async function processRequest(body) {
         });
         console.log('内容完整性检查:', contentCheck);
 
-        // 如果内容不完整，等待更长时间
+        // 如果内容不完整，等待更长时间，优化所有模式的等待时间
         if (!contentCheck.hasConclusion) {
             console.log('内容可能不完整，等待更长时间...');
-            await delay(5000);
+            await delay(isLowSpecMode ? 2000 : 3000);
             const retryBoundingBox = await cardElement.boundingBox();
             console.log('重试后边界框:', retryBoundingBox);
             if (retryBoundingBox && retryBoundingBox.height > finalBoundingBox.height) {
@@ -419,7 +443,7 @@ async function processRequest(body) {
                 height: finalBoundingBox.height,
                 scale: imgScale // 设置截图缩放比例
             },
-            timeout: isLowSpecMode ? 30000 : (parseInt(process.env.SCREENSHOT_TIMEOUT || '60000')), // 低配置模式降低截图超时
+            timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || (isLowSpecMode ? '60000' : '60000')), // 使用环境变量配置的截图超时
         });
         console.log('截图已捕获');
 
