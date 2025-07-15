@@ -239,31 +239,36 @@ async function processRequest(body) {
         iconSrc,
     }, async ({page, data}) => {
         const {url, body, iconSrc} = data;
-
-        await page.setRequestInterception(true);
+        await page.setRequestInterception(true); // 设置请求拦截
         page.on('request', req => {
             req.continue();
         });
 
-        const viewPortConfig = {width: 1920, height: 1080};
-        await page.setViewport(viewPortConfig);
+        const viewPortConfig = {width: 1920, height: 1080}; // 设置视口配置
+        await page.setViewport(viewPortConfig); // 应用视口配置
         console.log('视口设置为:', viewPortConfig);
 
-        // 优化 #1: 使用 domcontentloaded，大大加快页面导航速度
         await page.goto(url, {
-            timeout: parseInt(process.env.NAVIGATION_TIMEOUT || (isLowSpecMode ? '90000' : '120000')),
-            waitUntil: 'domcontentloaded'
+            timeout: parseInt(process.env.NAVIGATION_TIMEOUT || (isLowSpecMode ? '90000' : '120000')), // 使用环境变量配置的导航超时
+            waitUntil: isLowSpecMode ? ['load'] : ['load', 'domcontentloaded'] // 优化等待条件，使用domcontentloaded替代networkidle2
         });
         console.log('页面已导航至:', url);
 
-        // 优化 #2: 移除硬等待，使用 waitForSelector 等待关键元素出现
-        const cardSelector = `.${body.temp || 'tempA'}`;
-        await page.waitForSelector(cardSelector, { timeout: 15000 });
+        // 优化所有模式的等待时间
+        await delay(isLowSpecMode ? 1000 : 1500)
+
+        // 这里因为字体是按需加载，所以前面的等待字体加载不太有效，这里增大等待时间，以免部分字体没有加载完成
+        // const cardElement = await page.$(`#${body.temp || 'tempA'}`); // 查找卡片元素
+        const cardElement = await page.$(`.${body.temp || 'tempA'}`); // 查找卡片元素
+        // const cardElement = await page.$(`.content-mode`);
+        if (!cardElement) {
+            throw new Error('请求的卡片不存在'); // 抛出错误
+        }
         console.log('找到卡片元素');
 
-        // --- 内容注入 ---
         if (translate) {
             await page.evaluate((translate: string) => {
+                // 如果有英文翻译插入英文翻译
                 const translateEl = document.querySelector('[name="showTranslation"]');
                 if (translateEl) translateEl.innerHTML = translate;
             }, translate);
@@ -277,26 +282,62 @@ async function processRequest(body) {
                 html = `<div data-v-fc3bb97c="" contenteditable="true" translate="no" name="editableText" class="editable-element md-class">${html}</div>`
             }
             await page.evaluate(html => {
+                // 插入内容
                 const contentEl = document.querySelector('[name="showContent"]');
                 if (contentEl) contentEl.innerHTML = html;
             }, html);
             console.log('卡片内容已设置');
+
+            // 等待内容中的图片加载完成
+            await page.evaluate(() => {
+                return new Promise((resolve) => {
+                    const images = document.querySelectorAll('[name="showContent"] img');
+                    if (images.length === 0) {
+                        resolve(true);
+                        return;
+                    }
+
+                    let loadedCount = 0;
+                    const totalImages = images.length;
+
+                    const checkComplete = () => {
+                        loadedCount++;
+                        if (loadedCount >= totalImages) {
+                            resolve(true);
+                        }
+                    };
+
+                    images.forEach((img: any) => {
+                        if (img.complete) {
+                            checkComplete();
+                        } else {
+                            img.addEventListener('load', checkComplete);
+                            img.addEventListener('error', checkComplete);
+                        }
+                    });
+
+                    // 设置超时，避免无限等待，优化所有模式的等待时间
+                    setTimeout(() => resolve(true), isLowSpecMode ? 5000 : 6000);
+                });
+            });
+            console.log('内容图片加载完成');
+
+            // 额外等待，确保布局重新计算完成，优化所有模式的等待时间
+            await delay(isLowSpecMode ? 500 : 1000);
         }
 
-        if (iconSrc) {
-             await page.evaluate(function (imgSrc) {
-                return new Promise(function (resolve, reject) {
+        if (iconSrc && iconSrc.startsWith('http')) {
+            await page.evaluate(function (imgSrc) {
+                return new Promise(function (resolve) {
                     let imageElement: any = document.querySelector('#icon');
+                    console.log("头像", imageElement);
                     if (imageElement) {
                         imageElement.src = imgSrc;
-                        const timeout = setTimeout(() => reject(new Error('Icon load timeout')), 10000);
                         imageElement.addEventListener('load', function () {
-                            clearTimeout(timeout);
                             resolve(true);
                         });
                         imageElement.addEventListener('error', function () {
-                            clearTimeout(timeout);
-                            resolve(true); // Resolve on error to not block screenshot
+                            resolve(true);
                         });
                     } else {
                         resolve(false);
@@ -305,74 +346,108 @@ async function processRequest(body) {
             }, iconSrc);
             console.log('图标已设置');
         }
-        // --- 内容注入结束 ---
 
+        // 等待页面布局稳定，确保所有内容都已渲染
+        await page.waitForFunction(() => {
+            return document.readyState === 'complete';
+        }, { timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || (isLowSpecMode ? '60000' : '60000')) });
 
-        // 优化 #3: 统一的、并行的智能等待，替换所有 delay
-        console.log('开始智能等待字体和图片加载...');
-        await page.evaluate((selector) => {
-            const cardElement = document.querySelector(selector);
-            if (!cardElement) return Promise.reject('Card element not found for waiting');
-
-            const fontsReady = document.fonts.ready;
-            const images = Array.from(cardElement.querySelectorAll('img')) as HTMLImageElement[];
-            const imagePromises = images.map((img: any) => {
-                if (img.complete) return Promise.resolve();
-                return new Promise((resolve) => {
-                    img.addEventListener('load', resolve);
-                    img.addEventListener('error', resolve); // 同样 resolve，避免阻塞
-                });
-            });
-
-            return Promise.all([fontsReady, ...imagePromises]);
-        }, cardSelector);
-        console.log('智能等待完成：字体和图片已加载');
-
-
-        const cardElement = await page.$(cardSelector);
-        if (!cardElement) {
-            throw new Error('请求的卡片不存在');
+        // 智能等待 - 检测关键元素是否已渲染（所有模式）
+        try {
+            await page.waitForFunction(() => {
+                const cardEl = document.querySelector('.tempA');
+                const contentEl = document.querySelector('[name="showContent"]');
+                return cardEl && contentEl && contentEl.children.length > 0;
+            }, { timeout: isLowSpecMode ? 5000 : 8000 });
+            console.log('智能等待：关键元素已渲染');
+        } catch (e) {
+            console.log('智能等待超时，继续执行');
         }
 
-        let boundingBox = await cardElement.boundingBox();
-        if (!boundingBox) throw new Error('无法获取卡片边界');
-        console.log('初始 boundingBox:', boundingBox);
+        // 额外等待确保动态内容渲染完成，优化所有模式的等待时间
+        await delay(isLowSpecMode ? 1000 : 1500);
+
+        const boundingBox = await cardElement.boundingBox(); // 获取卡片元素边界框
+        console.log('boundingBox', boundingBox);
+
+        // 验证边界框是否合理
+        if (!boundingBox || boundingBox.height < 100) {
+            console.error('边界框异常，重新获取');
+            await delay(isLowSpecMode ? 1000 : 1500);
+            const retryBoundingBox = await cardElement.boundingBox();
+            console.log('重试后的boundingBox', retryBoundingBox);
+            if (retryBoundingBox && retryBoundingBox.height > boundingBox?.height) {
+                Object.assign(boundingBox, retryBoundingBox);
+            }
+        }
 
         let imgScale = body.imgScale ? body.imgScale : scale;
 
-        // 动态调整视口以适应长内容
         if (boundingBox.height > viewPortConfig.height) {
-            console.log('卡片高度大于视口高度，调整视口');
-            const newHeight = Math.ceil(boundingBox.height) + 200; // 增加200px缓冲区
-            await page.setViewport({ width: 1920, height: newHeight });
-            console.log('调整后视口高度:', newHeight);
+            console.log('卡片高度大于视口高度，需要截取图片',boundingBox.height);
+            // 使用 Math.ceil 向上取整，确保不丢失任何像素
+            // 增加更大的缓冲区（600px）以确保二维码等底部内容完整显示
+            const newHeight = Math.ceil(boundingBox.height) + 600;
+            await page.setViewport({
+                width: 1920,
+                height: newHeight
+            });
+            console.log('调整视口高度:', newHeight);
 
-            // 调整视口后，需要给浏览器一点时间重新布局，并重新获取元素
-            await page.waitForFunction((selector) => {
-                 const el = document.querySelector(selector);
-                 return el && el.getBoundingClientRect().height > 100;
-            }, {timeout: 5000}, cardSelector);
-
-            boundingBox = await cardElement.boundingBox();
-             if (!boundingBox) throw new Error('调整视口后无法获取卡片边界');
-            console.log('调整视口后的 boundingBox:', boundingBox);
+            // 调整视口后等待重新渲染，优化所有模式的等待时间
+            await delay(isLowSpecMode ? 500 : 1000);
         }
 
-        console.log('图片缩放比例为:', imgScale);
+        // 在调整视口后重新获取边界框，确保位置准确
+        const finalBoundingBox = await cardElement.boundingBox();
+        console.log('最终边界框:', finalBoundingBox);
+
+        // 检查内容是否完整渲染（通过检查特定文本是否存在）
+        const contentCheck = await page.evaluate(() => {
+            const contentEl = document.querySelector('[name="showContent"]');
+            if (contentEl) {
+                const text = contentEl.textContent || '';
+                const hasConclusion = text.includes('如果您能看到这段文字，说明高度自适应功能工作正常');
+                const hasQRCode = document.querySelector('[name="showContent"]') &&
+                                 document.querySelector('*[class*="qr"], *[id*="qr"], *[class*="code"]');
+                return {
+                    textLength: text.length,
+                    hasConclusion,
+                    hasQRCode: !!hasQRCode,
+                    fullText: text.substring(text.length - 100) // 最后100个字符
+                };
+            }
+            return { textLength: 0, hasConclusion: false, hasQRCode: false, fullText: '' };
+        });
+        console.log('内容完整性检查:', contentCheck);
+
+        // 如果内容不完整，等待更长时间，优化所有模式的等待时间
+        if (!contentCheck.hasConclusion) {
+            console.log('内容可能不完整，等待更长时间...');
+            await delay(isLowSpecMode ? 2000 : 3000);
+            const retryBoundingBox = await cardElement.boundingBox();
+            console.log('重试后边界框:', retryBoundingBox);
+            if (retryBoundingBox && retryBoundingBox.height > finalBoundingBox.height) {
+                Object.assign(finalBoundingBox, retryBoundingBox);
+                console.log('使用重试后的边界框');
+            }
+        }
+
+        console.log('图片缩放比例为:', imgScale)
         const buffer = await page.screenshot({
-            type: 'png',
+            type: 'png', // 设置截图格式为 PNG
             clip: {
-                x: boundingBox.x,
-                y: boundingBox.y,
-                width: boundingBox.width,
-                height: boundingBox.height,
-                scale: imgScale
+                x: finalBoundingBox.x,
+                y: finalBoundingBox.y,
+                width: finalBoundingBox.width,
+                height: finalBoundingBox.height,
+                scale: imgScale // 设置截图缩放比例
             },
-            timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || '60000'),
+            timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || (isLowSpecMode ? '60000' : '60000')), // 使用环境变量配置的截图超时
         });
         console.log('截图已捕获');
 
-        return buffer;
+        return buffer; // 返回截图
     });
 
     // 检查缓存大小，确保不会超过限制

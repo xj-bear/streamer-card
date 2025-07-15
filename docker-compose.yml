@@ -1,39 +1,25 @@
+version: '3.8'
+
 services:
   streamer-card:
-    build: .
-    container_name: streamer-card
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-streamer-card-app} # Use IMAGE_NAME from .env or default
+    container_name: ${CONTAINER_NAME:-streamer-card-container} # Use CONTAINER_NAME from .env or default
+    restart: always
     ports:
       - "9200:3003"
     environment:
-      - NODE_ENV=production
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - NODE_OPTIONS=--max-old-space-size=1024
-      # 标准配置优化参数
-      - LOW_SPEC_MODE=false
-      - MAX_CONCURRENCY=2
-      - PROTOCOL_TIMEOUT=60000
-      - NAVIGATION_TIMEOUT=120000
-      - SCREENSHOT_TIMEOUT=60000
-      - IMAGE_SCALE=2
-      - MAX_RETRIES=2
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/api"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-          cpus: '1.5'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
-    shm_size: 512m
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
+      - NODE_ENV=${NODE_ENV:-production}
+      - LOW_SPEC_MODE=${LOW_SPEC_MODE:-true}
+      - IMAGE_SCALE=${IMAGE_SCALE:-2}
+      - MAX_CONCURRENCY=${MAX_CONCURRENCY:-5}
+      - MAX_RETRIES=${MAX_RETRIES:-2}
+      - PROTOCOL_TIMEOUT=${PROTOCOL_TIMEOUT:-60000}
+      - NAVIGATION_TIMEOUT=${NAVIGATION_TIMEOUT:-120000}
+      - SCREENSHOT_TIMEOUT=${SCREENSHOT_TIMEOUT:-60000}
+      
+    volumes:
+      - ./src:/app/src
+      - /app/node_modules

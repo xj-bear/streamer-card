@@ -23,15 +23,22 @@ git clone https://github.com/xj-bear/streamer-card.git
 cd streamer-card
 ```
 
-2. **运行部署脚本**：
-```bash
-chmod +x deploy.sh
-./deploy.sh
-```
+2. **选择环境配置文件**：
+   根据您的服务器配置，从以下选项中选择一个 `.env` 文件，并将其重命名为 `.env`：
+   - `.env.prod`: 标准生产环境 (推荐 2GB+ 内存)
+   - `.env.low-spec`: 低配置环境 (适用于 1GB 内存)
+   - `.env.high-performance`: 高性能环境 (适用于 4GB+ 内存)
+   - `.env.ultra-performance`: 极限性能环境 (适用于 8GB+ 内存)
 
-3. **选择配置模式**：
-   - 选择 `1` - 标准配置（推荐2GB+内存服务器）
-   - 选择 `2` - 低配置模式（适用1GB内存服务器）
+   例如，要使用低配置模式，请运行：
+   ```bash
+   cp .env.low-spec .env
+   ```
+
+3. **启动服务**：
+```bash
+docker-compose up -d --build
+```
 
 4. **访问服务**：
    - 🌐 服务地址：http://localhost:9200
@@ -114,33 +121,38 @@ chmod +x deploy.sh
 
 返回：`hello world`
 
-## ⚙️ 配置说明
+## ⚙️ 环境配置
 
-### 环境变量
+您可以通过编辑根目录下的 `.env` 文件来精细调整服务的性能和资源使用。该文件由 `docker-compose.yml` 加载。
 
-#### 基础配置
-- `NODE_ENV`: 运行环境（development/production）
-- `PUPPETEER_EXECUTABLE_PATH`: Chromium可执行文件路径
-- `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: 跳过Chromium下载
+我们提供了几种预设的配置文件，您可以根据需要复制和修改：
 
-#### 低配置模式优化
-- `LOW_SPEC_MODE=true`: 启用低配置模式
-- `MAX_CONCURRENCY=1`: 最大并发数
-- `PROTOCOL_TIMEOUT=30000`: 协议超时时间（毫秒）
-- `NAVIGATION_TIMEOUT=60000`: 页面导航超时（毫秒）
-- `SCREENSHOT_TIMEOUT=30000`: 截图超时时间（毫秒）
-- `IMAGE_SCALE=1`: 图片缩放比例
-- `MAX_RETRIES=1`: 最大重试次数
+- `.env.prod`: 标准生产环境 (推荐 2GB+ 内存)
+- `.env.low-spec`: 低配置环境 (适用于 1GB 内存)
+- `.env.high-performance`: 高性能环境 (适用于 4GB+ 内存)
+- `.env.ultra-performance`: 极限性能环境 (适用于 8GB+ 内存)
 
-### Docker配置对比
+**要使用特定配置，请先将其复制为 `.env` 文件**，例如：
 
-| 配置项 | 标准配置 | 低配置模式 |
-|-------|---------|-----------|
-| **内存限制** | 1.5GB | 512MB |
-| **CPU限制** | 1.5核 | 0.5核 |
-| **并发数** | 2-5 | 1 |
-| **图片缩放** | 2x | 1x |
-| **超时时间** | 较长 | 较短 |
+```bash
+cp .env.prod .env
+```
+
+### 环境变量详解
+
+| 变量名 | 描述 | 默认值 | 低配建议 | 高配建议 |
+| :--- | :--- | :--- | :--- | :--- |
+| `NODE_ENV` | 运行环境。**始终应设为 `production`** 以获得最佳性能。 | `production` | `production` | `production` |
+| `IMAGE_NAME` | 生成的 Docker 镜像名称。 | `streamer-card-app` | `streamer-card-low-spec` | `streamer-card-high` |
+| `CONTAINER_NAME` | 运行的 Docker 容器名称。 | `streamer-card-container` | `streamer-card-low-spec-container` | `streamer-card-high-container` |
+| `LOW_SPEC_MODE` | 是否启用低配置模式。显著降低资源消耗。 | `false` | `true` | `false` |
+| `IMAGE_SCALE` | 图片缩放比例。值越高，图片越清晰，但消耗资源越多。 | `2` | `1` | `2.5` 或更高 |
+| `MAX_CONCURRENCY` | 最大并发处理数。值越高，吞吐量越大，但需要更多 CPU 和内存。 | `5` | `1` | `10` 或更高 |
+| `MAX_RETRIES` | 请求失败后的最大重试次数。 | `2` | `1` | `3` |
+| `PROTOCOL_TIMEOUT` | Puppeteer 内部协议超时时间（毫秒）。 | `60000` | `120000` | `60000` |
+| `NAVIGATION_TIMEOUT` | 页面导航超时时间（毫秒）。 | `120000` | `90000` | `120000` |
+| `SCREENSHOT_TIMEOUT` | 截图生成超时时间（毫秒）。 | `60000` | `60000` | `60000` |
+
 
 ## 🔧 管理命令
 
