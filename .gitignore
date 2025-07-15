@@ -5,6 +5,8 @@
 .nuxt
 .nitro
 .cache
+.vercel
+.kiro
 dist
 
 # Node dependencies
