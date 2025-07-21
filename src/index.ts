@@ -370,11 +370,42 @@ async function processRequest(body) {
         }, cardSelector);
         console.log('智能等待完成：字体和图片已加载');
 
+        // 字体加载完成后，给额外时间让不同字体重新计算布局
+        console.log('等待字体布局重新计算...');
+        await page.evaluate(() => {
+            return new Promise(resolve => {
+                // 强制重新计算布局
+                document.body.offsetHeight;
+                // 等待字体布局稳定，特别是对于不同字体
+                setTimeout(resolve, 1000);
+            });
+        });
+        console.log('字体布局重新计算完成');
+
 
         const cardElement = await page.$(cardSelector);
         if (!cardElement) {
             throw new Error('请求的卡片不存在');
         }
+
+        // 在获取边界框前，确保所有字体和布局都已稳定
+        await page.evaluate((selector) => {
+            return new Promise(resolve => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    // 强制重新计算样式和布局
+                    element.offsetHeight;
+                    // 检查字体是否真正加载完成
+                    document.fonts.ready.then(() => {
+                        // 再次强制重新计算
+                        element.offsetHeight;
+                        setTimeout(resolve, 200); // 给字体渲染额外时间
+                    });
+                } else {
+                    resolve(null);
+                }
+            });
+        }, cardSelector);
 
         let boundingBox = await cardElement.boundingBox();
         if (!boundingBox) throw new Error('无法获取卡片边界');
@@ -383,7 +414,9 @@ async function processRequest(body) {
         let imgScale = body.imgScale ? body.imgScale : scale;
 
         // 动态调整视口以适应长内容
-        if (boundingBox.height > viewPortConfig.height) {
+        // 降低触发阈值，确保接近视口高度的内容也能正确处理
+        const adjustThreshold = viewPortConfig.height - 50; // 提前50px触发调整
+        if (boundingBox.height > adjustThreshold) {
             console.log('卡片高度大于视口高度，调整视口');
             const newHeight = Math.ceil(boundingBox.height) + 300; // 增加300px缓冲区，防止黑边
             await page.setViewport({ width: 1920, height: newHeight });
