@@ -41,8 +41,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'] // 允许的请求头
 }));
 
-app.use(express.json()); // 使用 JSON 中间件
-app.use(express.urlencoded({extended: false})); // 使用 URL 编码中间件
+app.use(express.json({ limit: '50mb' })); // 使用 JSON 中间件，增加大小限制
+app.use(express.urlencoded({extended: false, limit: '50mb'})); // 使用 URL 编码中间件
 
 let cluster; // 定义 Puppeteer 集群变量
 
@@ -245,6 +245,11 @@ async function processRequest(body) {
             req.continue();
         });
 
+        // 设置页面编码为UTF-8
+        await page.setExtraHTTPHeaders({
+            'Accept-Charset': 'utf-8'
+        });
+
         const viewPortConfig = {width: 1920, height: 1080};
         await page.setViewport(viewPortConfig);
         console.log('视口设置为:', viewPortConfig);
@@ -262,6 +267,18 @@ async function processRequest(body) {
         console.log('找到卡片元素');
 
         // --- 内容注入 ---
+        // 确保页面使用UTF-8编码
+        await page.evaluate(() => {
+            if (document.head) {
+                const metaCharset = document.querySelector('meta[charset]');
+                if (!metaCharset) {
+                    const meta = document.createElement('meta');
+                    meta.setAttribute('charset', 'UTF-8');
+                    document.head.insertBefore(meta, document.head.firstChild);
+                }
+            }
+        });
+
         if (translate) {
             await page.evaluate((translate: string) => {
                 const translateEl = document.querySelector('[name="showTranslation"]');
@@ -276,9 +293,16 @@ async function processRequest(body) {
                 html = md.render(content);
                 html = `<div data-v-fc3bb97c="" contenteditable="true" translate="no" name="editableText" class="editable-element md-class">${html}</div>`
             }
-            await page.evaluate(html => {
+
+            // 确保内容正确编码
+            console.log('注入的内容:', content.substring(0, 100) + '...');
+
+            await page.evaluate((html: string) => {
                 const contentEl = document.querySelector('[name="showContent"]');
-                if (contentEl) contentEl.innerHTML = html;
+                if (contentEl) {
+                    contentEl.innerHTML = html;
+                    console.log('内容已注入，长度:', html.length);
+                }
             }, html);
             console.log('卡片内容已设置');
         }
@@ -316,11 +340,29 @@ async function processRequest(body) {
 
             const fontsReady = document.fonts.ready;
             const images = Array.from(cardElement.querySelectorAll('img')) as HTMLImageElement[];
-            const imagePromises = images.map((img: any) => {
-                if (img.complete) return Promise.resolve();
+            console.log(`找到 ${images.length} 个图片需要等待加载`);
+
+            const imagePromises = images.map((img: any, index: number) => {
+                if (img.complete && img.naturalHeight !== 0) {
+                    console.log(`图片 ${index + 1} 已完成加载`);
+                    return Promise.resolve();
+                }
                 return new Promise((resolve) => {
-                    img.addEventListener('load', resolve);
-                    img.addEventListener('error', resolve); // 同样 resolve，避免阻塞
+                    const timeout = setTimeout(() => {
+                        console.log(`图片 ${index + 1} 加载超时`);
+                        resolve(null);
+                    }, 8000); // 增加超时时间到8秒
+
+                    img.addEventListener('load', () => {
+                        clearTimeout(timeout);
+                        console.log(`图片 ${index + 1} 加载完成`);
+                        resolve(null);
+                    });
+                    img.addEventListener('error', () => {
+                        clearTimeout(timeout);
+                        console.log(`图片 ${index + 1} 加载失败`);
+                        resolve(null);
+                    });
                 });
             });
 
@@ -343,15 +385,41 @@ async function processRequest(body) {
         // 动态调整视口以适应长内容
         if (boundingBox.height > viewPortConfig.height) {
             console.log('卡片高度大于视口高度，调整视口');
-            const newHeight = Math.ceil(boundingBox.height) + 200; // 增加200px缓冲区
+            const newHeight = Math.ceil(boundingBox.height) + 300; // 增加300px缓冲区，防止黑边
             await page.setViewport({ width: 1920, height: newHeight });
             console.log('调整后视口高度:', newHeight);
 
-            // 调整视口后，需要给浏览器一点时间重新布局，并重新获取元素
+            // 调整视口后，需要给浏览器更多时间重新布局和渲染
             await page.waitForFunction((selector) => {
                  const el = document.querySelector(selector);
                  return el && el.getBoundingClientRect().height > 100;
-            }, {timeout: 5000}, cardSelector);
+            }, {timeout: 8000}, cardSelector);
+
+            // 额外等待，确保长内容完全渲染
+            await page.evaluate(() => {
+                return new Promise(resolve => {
+                    // 等待所有图片完全加载
+                    const images = Array.from(document.querySelectorAll('img'));
+                    const imagePromises = images.map(img => {
+                        if (img.complete && img.naturalHeight !== 0) {
+                            return Promise.resolve();
+                        }
+                        return new Promise(resolve => {
+                            img.addEventListener('load', resolve);
+                            img.addEventListener('error', resolve);
+                            // 设置超时，避免无限等待
+                            setTimeout(resolve, 3000);
+                        });
+                    });
+
+                    Promise.all([
+                        document.fonts.ready,
+                        ...imagePromises,
+                        // 额外等待500ms确保渲染完成
+                        new Promise(resolve => setTimeout(resolve, 500))
+                    ]).then(resolve);
+                });
+            });
 
             boundingBox = await cardElement.boundingBox();
              if (!boundingBox) throw new Error('调整视口后无法获取卡片边界');
@@ -359,13 +427,28 @@ async function processRequest(body) {
         }
 
         console.log('图片缩放比例为:', imgScale);
+
+        // 最终检查：确保元素完全可见并获取最新的边界框
+        await page.evaluate((selector) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                element.scrollIntoView({ behavior: 'instant', block: 'start' });
+            }
+        }, cardSelector);
+
+        // 再次获取边界框，确保准确性
+        const finalBoundingBox = await cardElement.boundingBox();
+        if (!finalBoundingBox) throw new Error('无法获取最终卡片边界');
+
+        console.log('最终截图边界框:', finalBoundingBox);
+
         const buffer = await page.screenshot({
             type: 'png',
             clip: {
-                x: boundingBox.x,
-                y: boundingBox.y,
-                width: boundingBox.width,
-                height: boundingBox.height,
+                x: Math.max(0, finalBoundingBox.x),
+                y: Math.max(0, finalBoundingBox.y),
+                width: finalBoundingBox.width,
+                height: finalBoundingBox.height,
                 scale: imgScale
             },
             timeout: parseInt(process.env.SCREENSHOT_TIMEOUT || '60000'),
